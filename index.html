@@ -4195,7 +4195,8 @@ function animalDetail(id) {
       <button onclick="showQR('${s.id}')"><span class="ico">📱</span>QR</button>
     </div>
     <div class="actions" style="margin-top:0">
-      <button class="primary" onclick="openTransferPanel('${s.id}')">📦 Transfer / Sell QR</button>
+      <button class="primary" onclick="generateFacebookAdvert('${s.id}')">🏷️ SALE advert</button>
+      <button onclick="openTransferPanel('${s.id}')">📦 Transfer / Sell QR</button>
       <button onclick="printSnakeHistory('${s.id}')">🖨️ Print History</button>
       <button class="danger" onclick="deleteAnimal('${s.id}')">Delete</button>
     </div>
@@ -4619,6 +4620,226 @@ function renderTransferHistoryCard(s) {
     `<div class="line"><b>${esc(e.date||'')}</b> ${esc(e.from||'?')} → ${esc(e.to||'buyer')}<div class="muted">${esc(e.note||'')}</div></div>`
   ).join('')}</div>`;
 }
+
+// ---------- FACEBOOK SALE ADVERT (downloadable PNG) ----------
+function buildSaleHistoryLines(s) {
+  const lines = [];
+  const feeds = (db.care || []).filter(c => c.snakeId === s.id && c.type === 'feed')
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const ate = feeds.filter(c => !/refus/i.test(c.result || '')).length;
+  const lastFeed = feeds[0];
+  const lastW = (db.care || []).filter(c => c.snakeId === s.id && c.type === 'weight')
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''))[0];
+  if (lastFeed) {
+    const res = lastFeed.result || '';
+    lines.push('Last fed ' + lastFeed.date + (lastFeed.value ? ': ' + lastFeed.value : '') + (res ? ' (' + res + ')' : ''));
+  }
+  if (ate > 0) lines.push(ate + ' recorded feeding' + (ate === 1 ? '' : 's') + ' on file');
+  else lines.push('Feeding history available on request');
+  if (lastW && lastW.value) lines.push('Last weight ' + lastW.value + ' g' + (lastW.date ? ' (' + lastW.date + ')' : ''));
+  else if (s.weight) lines.push('Weight ' + s.weight + ' g');
+  lines.push('Healthy · clean sheds');
+  if (s.notes && String(s.notes).trim()) {
+    const n = String(s.notes).trim().replace(/\s+/g, ' ');
+    lines.push(n.length > 70 ? n.slice(0, 67) + '…' : n);
+  } else {
+    lines.push('Full care log available with sale');
+  }
+  lines.push('Ready for a new home');
+  return lines.slice(0, 5);
+}
+
+function loadImageForAdvert(src) {
+  return new Promise((resolve, reject) => {
+    if (!src) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+async function generateFacebookAdvert(id) {
+  const s = db.snakes.find(x => x.id === id);
+  if (!s) return;
+  const photoSrc = (s.photos && s.photos[0]) || s.photo || '';
+  if (!photoSrc) {
+    alert('Add a photo to this snake first — the Facebook advert needs a picture.');
+    return;
+  }
+  // Show working state
+  const wait = document.createElement('div');
+  wait.className = 'overlay';
+  wait.id = 'saleAdvertWait';
+  wait.innerHTML = `<div class="sheet" style="text-align:center"><h2>🏷️ Making sale advert…</h2><p class="muted">Building Facebook image with photo, sex & history</p></div>`;
+  document.body.appendChild(wait);
+
+  try {
+    const img = await loadImageForAdvert(photoSrc);
+    const W = 1080, H = 1350;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Photo area (top ~62%)
+    const photoH = Math.floor(H * 0.62);
+    if (img) {
+      // cover-fit
+      const scale = Math.max(W / img.width, photoH / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      const dx = (W - dw) / 2, dy = (photoH - dh) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, photoH);
+      ctx.clip();
+      ctx.drawImage(img, dx, dy, dw, dh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, W, photoH);
+    }
+
+    // Bottom gradient fade into panel
+    const grad = ctx.createLinearGradient(0, photoH - 120, 0, photoH + 20);
+    grad.addColorStop(0, 'rgba(10,10,10,0)');
+    grad.addColorStop(1, 'rgba(10,10,10,1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, photoH - 120, W, 140);
+
+    // Bottom panel
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, photoH, W, H - photoH);
+
+    // FOR SALE gold badge (top-left)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(110, 110, 78, 0, Math.PI * 2);
+    const gold = ctx.createLinearGradient(40, 40, 180, 180);
+    gold.addColorStop(0, '#f5d76e');
+    gold.addColorStop(0.5, '#d4a017');
+    gold.addColorStop(1, '#a67c00');
+    ctx.fillStyle = gold;
+    ctx.fill();
+    ctx.fillStyle = '#1a1200';
+    ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FOR', 110, 95);
+    ctx.fillText('SALE', 110, 128);
+    ctx.restore();
+
+    // AVAILABLE pill (top-right)
+    ctx.save();
+    roundRectPath(ctx, W - 280, 48, 230, 64, 32);
+    ctx.fillStyle = '#ef4444';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('AVAILABLE', W - 165, 82);
+    ctx.restore();
+
+    // Text block
+    let y = photoH + 56;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
+    ctx.fillText('BALL PYTHON', 48, y);
+    y += 58;
+
+    const sex = (s.sex && s.sex !== 'Unknown') ? s.sex : '—';
+    const dob = s.dob || '—';
+    const wt = s.weight ? (s.weight + ' g') : '—';
+    ctx.fillStyle = '#d4d4d4';
+    ctx.font = '32px system-ui, -apple-system, sans-serif';
+    ctx.fillText('Sex: ' + sex + '    DOB: ' + dob + '    Weight: ' + wt, 48, y);
+    y += 50;
+
+    // Morph line
+    const morph = (s.genes || '').trim() || 'Morph not recorded';
+    ctx.fillStyle = '#f5d76e';
+    ctx.font = 'bold 30px system-ui, -apple-system, sans-serif';
+    // wrap morph if long
+    const maxW = W - 96;
+    let morphLine = morph;
+    if (ctx.measureText(morphLine).width > maxW) {
+      while (morphLine.length > 8 && ctx.measureText(morphLine + '…').width > maxW) morphLine = morphLine.slice(0, -1);
+      morphLine += '…';
+    }
+    ctx.fillText(morphLine, 48, y);
+    y += 52;
+
+    // HISTORY header
+    ctx.fillStyle = '#eab308';
+    ctx.font = 'bold 34px system-ui, -apple-system, sans-serif';
+    ctx.fillText('HISTORY', 48, y);
+    y += 44;
+
+    ctx.fillStyle = '#e5e5e5';
+    ctx.font = '28px system-ui, -apple-system, sans-serif';
+    buildSaleHistoryLines(s).forEach(line => {
+      let L = line;
+      if (ctx.measureText(L).width > maxW) {
+        while (L.length > 8 && ctx.measureText(L + '…').width > maxW) L = L.slice(0, -1);
+        L += '…';
+      }
+      ctx.fillText(L, 48, y);
+      y += 38;
+    });
+
+    // Footer
+    ctx.fillStyle = '#888';
+    ctx.font = '24px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Serious inquiries  ·  Message for details', W / 2, H - 58);
+    ctx.fillStyle = '#eab308';
+    ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
+    ctx.fillText('Ball Python Complete Pro', W / 2, H - 28);
+
+    // Preview + download overlay
+    wait.remove();
+    const dataUrl = canvas.toDataURL('image/png');
+    const safe = (s.name || 'snake').replace(/[^\w\-]+/g, '_').slice(0, 40);
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.id = 'saleAdvertPreview';
+    ov.innerHTML = `
+      <div class="sheet" style="max-width:520px;text-align:center">
+        <h2>🏷️ Facebook sale advert</h2>
+        <p class="muted">${esc(s.name)} · ready to download</p>
+        <img src="${dataUrl}" alt="Sale advert" style="width:100%;border-radius:12px;margin:10px 0;border:1px solid var(--border)">
+        <div class="actions" style="margin-top:12px;flex-wrap:wrap;justify-content:center">
+          <a class="primary" id="saleAdvertDl" download="bppro-sale-${safe}.png" href="${dataUrl}"
+             style="display:inline-block;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">⬇️ Download for Facebook</a>
+          <button type="button" class="ghost" onclick="document.getElementById('saleAdvertPreview')?.remove()">Close</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:10px">Post the image on Facebook, then paste sex / morph / history in the caption too.</p>
+      </div>`;
+    document.body.appendChild(ov);
+  } catch (e) {
+    console.error(e);
+    wait.remove();
+    alert('Could not build advert. Try another photo or a smaller image.');
+  }
+}
+
+
 function openTransferPanel(id) {
   const s = db.snakes.find(x => x.id === id);
   if (!s) return;
