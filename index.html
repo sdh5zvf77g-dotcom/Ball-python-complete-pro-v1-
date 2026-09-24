@@ -4621,6 +4621,47 @@ function renderTransferHistoryCard(s) {
   ).join('')}</div>`;
 }
 
+
+async function downloadSaleAdvertToDevice() {
+  const dataUrl = window.__saleAdvertDataUrl;
+  const fileName = window.__saleAdvertFileName || 'bppro-sale-advert.png';
+  if (!dataUrl) { alert('No advert ready. Generate it again.'); return; }
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], fileName, { type: 'image/png' });
+    // iOS / Android: Web Share with file → Save Image / Photos / Files
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: fileName });
+      return;
+    }
+    if (navigator.share) {
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+  } catch (e) {
+    console.warn('share failed', e);
+  }
+  // Fallback: trigger file download (Files / Downloads)
+  try {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = fileName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (e2) {
+    // Last resort: open image so user can long-press → Save Image
+    const w = window.open(dataUrl, '_blank');
+    if (!w) alert('Open the image, then long-press and choose Save Image / Add to Photos.');
+  }
+}
+
 // ---------- FACEBOOK SALE ADVERT (downloadable PNG) ----------
 function buildSaleHistoryLines(s) {
   const lines = [];
@@ -4803,35 +4844,74 @@ async function generateFacebookAdvert(id) {
       y += 38;
     });
 
-    // Footer
+    // Footer — match app header: icon + Ball Python (green) + Complete Pro (white)
     ctx.fillStyle = '#888';
     ctx.font = '24px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Serious inquiries  ·  Message for details', W / 2, H - 58);
-    ctx.fillStyle = '#eab308';
-    ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
-    ctx.fillText('Ball Python Complete Pro', W / 2, H - 28);
+    ctx.fillText('Serious inquiries  ·  Message for details', W / 2, H - 72);
 
-    // Preview + download overlay
+    const logoEl = document.querySelector('.app-logo');
+    const logoSrc = logoEl ? logoEl.src : '';
+    const logoImg = logoSrc ? await loadImageForAdvert(logoSrc) : null;
+    const brandY = H - 28;
+    const iconSize = 32;
+    const gap = 10;
+    ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
+    const greenPart = 'Ball Python';
+    const whitePart = ' Complete Pro';
+    const wGreen = ctx.measureText(greenPart).width;
+    const wWhite = ctx.measureText(whitePart).width;
+    const totalW = (logoImg ? iconSize + gap : 0) + wGreen + wWhite;
+    let bx = (W - totalW) / 2;
+    if (logoImg) {
+      try {
+        const r = 6;
+        ctx.save();
+        roundRectPath(ctx, bx, brandY - iconSize + 4, iconSize, iconSize, r);
+        ctx.clip();
+        ctx.drawImage(logoImg, bx, brandY - iconSize + 4, iconSize, iconSize);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(212,175,55,0.45)';
+        ctx.lineWidth = 1.5;
+        roundRectPath(ctx, bx, brandY - iconSize + 4, iconSize, iconSize, r);
+        ctx.stroke();
+      } catch (e) {}
+      bx += iconSize + gap;
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#22c55e';
+    ctx.fillText(greenPart, bx, brandY);
+    bx += wGreen;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(whitePart, bx, brandY);
+    ctx.textAlign = 'center';
+
+    // Preview + download overlay (mobile-friendly save to Photos / Files)
     wait.remove();
     const dataUrl = canvas.toDataURL('image/png');
     const safe = (s.name || 'snake').replace(/[^\w\-]+/g, '_').slice(0, 40);
+    const fileName = 'bppro-sale-' + safe + '.png';
+    window.__saleAdvertDataUrl = dataUrl;
+    window.__saleAdvertFileName = fileName;
     const ov = document.createElement('div');
     ov.className = 'overlay';
     ov.id = 'saleAdvertPreview';
     ov.innerHTML = `
       <div class="sheet" style="max-width:520px;text-align:center">
-        <h2>🏷️ Facebook sale advert</h2>
-        <p class="muted">${esc(s.name)} · ready to download</p>
+        <h2>🏷️ Sale advert</h2>
+        <p class="muted">${esc(s.name)} · ready to save</p>
         <img src="${dataUrl}" alt="Sale advert" style="width:100%;border-radius:12px;margin:10px 0;border:1px solid var(--border)">
         <div class="actions" style="margin-top:12px;flex-wrap:wrap;justify-content:center">
-          <a class="primary" id="saleAdvertDl" download="bppro-sale-${safe}.png" href="${dataUrl}"
-             style="display:inline-block;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">⬇️ Download for Facebook</a>
+          <button type="button" class="primary" id="saleAdvertDlBtn"
+             style="padding:12px 18px;border-radius:12px;font-weight:700">⬇️ Download advert</button>
           <button type="button" class="ghost" onclick="document.getElementById('saleAdvertPreview')?.remove()">Close</button>
         </div>
-        <p class="muted" style="font-size:12px;margin-top:10px">Post the image on Facebook, then paste sex / morph / history in the caption too.</p>
+        <p class="muted" style="font-size:12px;margin-top:10px">On iPhone: Share → Save Image (Photos) or Save to Files. On Android: Downloads / Gallery.</p>
       </div>`;
     document.body.appendChild(ov);
+    const dlBtn = document.getElementById('saleAdvertDlBtn');
+    if (dlBtn) dlBtn.onclick = () => downloadSaleAdvertToDevice();
   } catch (e) {
     console.error(e);
     wait.remove();
