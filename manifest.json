@@ -1,0 +1,24 @@
+{
+  "name": "Ball Python Complete Pro",
+  "short_name": "BP Complete Pro",
+  "description": "Care \u00b7 Breeding \u00b7 Business \u00b7 Offline",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050d09",
+  "theme_color": "#0a1610",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
