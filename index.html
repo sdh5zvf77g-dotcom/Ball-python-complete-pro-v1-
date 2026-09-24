@@ -488,6 +488,8 @@ textarea { min-height: 96px; resize: vertical; }
       <div class="actions" style="margin-top:0">
         <button class="primary" onclick="newAnimal()">＋ <span data-i18n="add_snake">Add Snake</span></button>
         <button onclick="openQRScanner()">📷 Scan QR</button>
+        <button onclick="document.getElementById('transferImportFile').click()">📥 Import transfer</button>
+        <input id="transferImportFile" type="file" accept="application/json,.json" style="display:none" onchange="importTransferFile(this)">
         <button onclick="bulkWeight()">⚖️ <span data-i18n="bulk_weight">Bulk Weight</span></button>
         <button onclick="bulkFeed()">🍽️ <span data-i18n="bulk_feed">Bulk Feed</span></button>
       </div>
@@ -550,15 +552,12 @@ textarea { min-height: 96px; resize: vertical; }
           <option>Holdback</option><option>Breeding Male</option><option>Breeding Female</option>
           <option>Proven</option><option>For Sale</option><option>Sold</option>
         </select>
-        <div class="three">
+        <div class="two">
           <div><label data-i18n="weight_g">Weight (g)</label><input id="aweight" type="number" min="0" placeholder="0"></div>
           <div><label data-i18n="dob">Date of Birth</label><input id="adob" type="date"></div>
-          <div><label data-i18n="location">Location</label><input id="alocation" placeholder="Rack A / Tub 4"></div>
         </div>
-        <div class="two">
-          <div><label data-i18n="feed_every">Feed every (days)</label><input id="afeedDays" type="number" min="1" placeholder="14" value="14"></div>
-          <div><label data-i18n="sale_price">Sale price</label><input id="aprice" placeholder="e.g. 5000 THB"></div>
-        </div>
+        <label data-i18n="feed_every">Feed every (days)</label>
+        <input id="afeedDays" type="number" min="1" placeholder="14" value="14">
         <label data-i18n="parents">Parents</label>
         <div class="two">
           <select id="asire"><option value="">Sire unknown</option></select>
@@ -1487,6 +1486,7 @@ en: {
   proven:'Proven',
   for_sale:'For Sale',
   sold:'Sold',
+  sold_snakes:'Sold',
   sire_unknown:'Sire unknown',
   dam_unknown:'Dam unknown',
   save_snake:'Save Snake',
@@ -3703,20 +3703,22 @@ function goAnimalsFilter(sex, status) {
 
 function dash() {
   const ss = db.snakes;
-  const males = ss.filter(s => s.sex === 'Male').length;
-  const females = ss.filter(s => s.sex === 'Female').length;
+  // Active collection excludes sold animals
+  const active = ss.filter(s => s.status !== 'Sold');
+  const males = active.filter(s => s.sex === 'Male').length;
+  const females = active.filter(s => s.sex === 'Female').length;
   const forSale = ss.filter(s => s.status === 'For Sale').length;
+  const sold = ss.filter(s => s.status === 'Sold').length;
   const activeClutches = db.clutches.filter(c => c.hatchDate && c.hatchDate >= today()).length;
-  const totalClutches = (db.clutches || []).length;
 
   ensureArrays();
   $('dashStats').innerHTML = `
-    <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','')}"><strong>${ss.length}</strong><span>${t('snakes')}</span></div>
+    <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','')}"><strong>${active.length}</strong><span>${t('snakes')}</span></div>
     <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('Male','')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('Male','')}"><strong>${males}</strong><span>${t('males')}</span></div>
     <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('Female','')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('Female','')}"><strong>${females}</strong><span>${t('females')}</span></div>
     <div class="stat accent clickable" role="button" tabindex="0" onclick="show('clutches')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();show('clutches')}"><strong>${activeClutches}</strong><span>${t('active_clutches')}</span></div>
     <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','For Sale')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','For Sale')}"><strong>${forSale}</strong><span>${t('for_sale_kpi')}</span></div>
-    <div class="stat warn clickable" role="button" tabindex="0" onclick="show('clutches')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();show('clutches')}"><strong>${totalClutches}</strong><span>${t('clutches')}</span></div>
+    <div class="stat warn clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','Sold')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','Sold')}"><strong>${sold}</strong><span>${t('sold_snakes')||'Sold'}</span></div>
     <div class="stat"><strong>${(db.pairings||[]).length}</strong><span>${t('pairings')}</span></div>
   `;
 
@@ -3972,7 +3974,7 @@ function animalCard(s) {
     <img class="thumb" src="${(s.photos && s.photos[0]) || s.photo || placeholder()}" alt="">
     <div class="grow">
       <h3>${esc(s.name || 'Unnamed')}</h3>
-      <div class="meta">${tSex(s.sex) || '—'} ${s.weight ? '· ' + esc(s.weight) + 'g' : ''} ${s.location ? '· ' + esc(s.location) : ''}</div>
+      <div class="meta">${tSex(s.sex) || '—'} ${s.weight ? '· ' + esc(s.weight) + 'g' : ''}</div>
       <div class="genes">${esc(s.genes || '')}</div>
       <div class="tags">
         ${s.status ? `<span class="tag status ${statusClass}">${esc(tStatus(s.status))}</span>` : ''}
@@ -3998,7 +4000,12 @@ function renderAnimals() {
       if (!terms.every(term => blob.includes(term))) return false;
     }
     if (sex && s.sex !== sex) return false;
-    if (st && s.status !== st) return false;
+    if (st) {
+      if (s.status !== st) return false;
+    } else {
+      // Default list (Snakes / Males / Females boxes): hide sold animals
+      if (s.status === 'Sold') return false;
+    }
     if (g && !(s.genes||'').toLowerCase().includes(g.toLowerCase())) return false;
     return true;
   });
@@ -4056,9 +4063,7 @@ function editAnimal(id) {
   $('astatusf').value = s.status || 'Holdback';
   $('aweight').value = s.weight || '';
   $('adob').value = s.dob || '';
-  $('alocation').value = s.location || '';
   if ($('afeedDays')) $('afeedDays').value = s.feedDays || 14;
-  if ($('aprice')) $('aprice').value = s.price || '';
   $('anotes').value = s.notes || '';
   $('asire').value = s.sire || '';
   $('adam').value = s.dam || '';
@@ -4132,15 +4137,16 @@ $('af').onsubmit = e => {
     hets: $('ahets').value.trim(),
     status: $('astatusf').value,
     feedDays: parseInt($('afeedDays').value) || 14,
-    price: $('aprice').value.trim(),
+    price: existing?.price || '',
     weight: $('aweight').value,
     dob: $('adob').value,
-    location: $('alocation').value.trim(),
+    location: existing?.location || '',
     sire: $('asire').value,
     dam: $('adam').value,
     notes: $('anotes').value.trim(),
     photo: photoData || (photoList[0] || ''),
     photos: photoList.length ? photoList : (photoData ? [photoData] : []),
+    transferHistory: existing?.transferHistory || [],
     created: existing?.created || today()
   };
   const i = db.snakes.findIndex(x => x.id === id);
@@ -4180,7 +4186,7 @@ function animalDetail(id) {
         ${photos.map(p => `<img class="detail-photo" src="${p}" style="max-width:85%;flex:none;margin:0">`).join('')}
       </div>` : ''}
     <h2>${esc(s.name)}</h2>
-    <div class="meta" style="margin-bottom:12px">${tSex(s.sex)} · ${esc(tStatus(s.status || 'Holdback'))} ${s.location ? '· ' + esc(s.location) : ''}</div>
+    <div class="meta" style="margin-bottom:12px">${tSex(s.sex)} · ${esc(tStatus(s.status || 'Holdback'))}</div>
     
     <div class="quick-actions">
       <button onclick="editAnimal('${s.id}')"><span class="ico">✏️</span>Edit</button>
@@ -4189,6 +4195,7 @@ function animalDetail(id) {
       <button onclick="showQR('${s.id}')"><span class="ico">📱</span>QR</button>
     </div>
     <div class="actions" style="margin-top:0">
+      <button class="primary" onclick="openTransferPanel('${s.id}')">📦 Transfer / Sell QR</button>
       <button onclick="shareSaleCard('${s.id}')">🏷️ Sale / Share Card</button>
       <button onclick="printSnakeHistory('${s.id}')">🖨️ Print History</button>
       <button class="danger" onclick="deleteAnimal('${s.id}')">Delete</button>
@@ -4200,10 +4207,11 @@ function animalDetail(id) {
       <div class="line"><b>Weight</b>${s.weight ? esc(s.weight) + ' g' : 'Not recorded'}${weightSpark(s.id)}</div>
       <div class="line"><b>Date of Birth</b>${esc(s.dob || 'Not recorded')}</div>
       <div class="line"><b>Feed interval</b>${s.feedDays || 14} days</div>
-      <div class="line"><b>Sale price</b>${esc(s.price || 'Not set')}</div>
       <div class="line"><b>Parents</b>Sire: ${esc(sire?.name || 'Unknown')} · Dam: ${esc(dam?.name || 'Unknown')}</div>
       <div class="line"><b>Notes</b>${esc(s.notes || 'None')}</div>
     </div>
+
+    ${renderTransferHistoryCard(s)}
 
     ${kids.length ? `<div class="card"><h3>Offspring (${kids.length})</h3>${kids.map(k => `<div class="line">${esc(k.name)} · ${esc(k.genes||'')}</div>`).join('')}</div>` : ''}
 
@@ -4438,7 +4446,7 @@ function openQRScanner() {
   overlay.innerHTML = `
     <div class="sheet" style="max-width:480px">
       <h2>📷 Scan snake QR</h2>
-      <p class="muted">Point at a Ball Python Complete Pro tub label QR, or take a photo of it.</p>
+      <p class="muted">Scan a tub label QR, or a <b>transfer / sale QR</b> from another Ball Python Complete Pro app.</p>
       <video id="qrVideo" playsinline autoplay muted style="width:100%;border-radius:12px;background:#000;max-height:280px;object-fit:cover"></video>
       <canvas id="qrScanCanvas" style="display:none"></canvas>
       <div id="qrScanStatus" class="muted" style="margin-top:8px">Starting camera…</div>
@@ -4464,12 +4472,21 @@ function closeQRScanner() {
 }
 
 function handleQRSuccess(text) {
-  const snake = findSnakeFromQR(text);
   closeQRScanner();
+  const xfer = typeof parseTransferQRText === 'function' ? parseTransferQRText(text) : null;
+  if (xfer) {
+    const nm = (xfer.snake && xfer.snake.name) || 'Unknown';
+    if (confirm('Import transferred snake “' + nm + '” from ' + (xfer.from || 'another keeper') + '?')) {
+      const snake = applyTransferPayload(xfer);
+      if (snake) animalDetail(snake.id);
+    }
+    return;
+  }
+  const snake = findSnakeFromQR(text);
   if (snake) {
     animalDetail(snake.id);
   } else {
-    alert('QR read, but no matching snake in this collection.\\n\\n' + String(text).slice(0, 180) + '\\n\\nTip: use QR codes generated by this app, and keep the same data on this phone.');
+    alert('QR read, but no matching snake in this collection.\n\n' + String(text).slice(0, 180) + '\n\nTip: scan a transfer QR from a seller, or a tub label from this app.');
   }
 }
 
@@ -4532,6 +4549,195 @@ async function startQRCamera() {
     console.warn(err);
     if (status) status.textContent = 'Camera blocked or unavailable. Use “Photo of QR” instead.';
   }
+}
+
+
+
+// ---------- SNAKE TRANSFER (QR + JSON) between BP Complete Pro apps ----------
+function getBusinessLabel() {
+  try {
+    const n = (db.settings && db.settings.businessName) ? String(db.settings.businessName).trim() : '';
+    return n || 'Ball Python Complete Pro user';
+  } catch (e) { return 'Ball Python Complete Pro user'; }
+}
+function b64urlEncode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+function b64urlDecode(str) {
+  let s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function buildTransferPayload(snakeId, opts) {
+  opts = opts || {};
+  const s = db.snakes.find(x => x.id === snakeId);
+  if (!s) return null;
+  const careLimit = opts.careLimit != null ? opts.careLimit : 40;
+  const care = (db.care || []).filter(c => c.snakeId === snakeId)
+    .sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, careLimit)
+    .map(c => ({ type:c.type, date:c.date, value:c.value||'', result:c.result||'', notes:(c.notes||'').slice(0,120) }));
+  const hist = Array.isArray(s.transferHistory) ? s.transferHistory.slice() : [];
+  const entry = { date: today(), from: getBusinessLabel(), to: opts.buyer||'', note: opts.note||'Sale / transfer', kind:'transfer' };
+  return {
+    v: 1, app: 'BPPRO', type: 'transfer',
+    exported: new Date().toISOString(),
+    from: getBusinessLabel(), buyer: opts.buyer||'', note: opts.note||'',
+    snake: {
+      name: s.name||'', sex: s.sex||'Unknown', genes: s.genes||'', hets: s.hets||'',
+      status: opts.markSold ? 'Holdback' : (s.status||'Holdback'),
+      weight: s.weight||'', dob: s.dob||'', feedDays: s.feedDays||14, notes: s.notes||'',
+      sireName: (db.snakes.find(x=>x.id===s.sire)||{}).name||'',
+      damName: (db.snakes.find(x=>x.id===s.dam)||{}).name||'',
+      originId: s.id,
+      transferHistory: hist.concat([entry])
+    },
+    care
+  };
+}
+function transferPayloadToQRText(payload) {
+  return 'BPPRO_XFER|' + b64urlEncode(JSON.stringify(payload));
+}
+function parseTransferQRText(raw) {
+  const t = String(raw||'').trim();
+  if (!t.startsWith('BPPRO_XFER|')) return null;
+  try {
+    const data = JSON.parse(b64urlDecode(t.slice(11)));
+    return (data && data.type === 'transfer' && data.snake) ? data : null;
+  } catch (e) { return null; }
+}
+function renderTransferHistoryCard(s) {
+  const h = Array.isArray(s.transferHistory) ? s.transferHistory : [];
+  if (!h.length) {
+    return `<div class="card"><h3>📦 Transfer history</h3><div class="muted">No transfers yet. Use “Transfer / Sell QR” when you sell so the buyer can import history into their app.</div></div>`;
+  }
+  return `<div class="card"><h3>📦 Transfer history</h3>${h.slice().reverse().map(e =>
+    `<div class="line"><b>${esc(e.date||'')}</b> ${esc(e.from||'?')} → ${esc(e.to||'buyer')}<div class="muted">${esc(e.note||'')}</div></div>`
+  ).join('')}</div>`;
+}
+function openTransferPanel(id) {
+  const s = db.snakes.find(x => x.id === id);
+  if (!s) return;
+  const ov = document.createElement('div');
+  ov.className = 'overlay'; ov.id = 'transferPanel';
+  ov.innerHTML = `<div class="sheet" style="max-width:520px">
+    <h2>📦 Transfer / Sell</h2>
+    <p class="muted">Package <b>${esc(s.name)}</b> for another Ball Python Complete Pro app (QR or JSON file).</p>
+    <label>Buyer name (optional)</label>
+    <input id="xferBuyer" placeholder="Buyer / new keeper">
+    <label>Note (optional)</label>
+    <input id="xferNote" placeholder="Sold, gift, trade…">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <input type="checkbox" id="xferMarkSold" style="width:18px;height:18px"> Mark as Sold after export
+    </label>
+    <div class="actions" style="margin-top:16px;flex-wrap:wrap">
+      <button type="button" class="primary" onclick="generateTransferQR('${id}')">📱 Transfer QR</button>
+      <button type="button" onclick="downloadTransferFile('${id}')">💾 Download JSON</button>
+      <button type="button" class="ghost" onclick="document.getElementById('transferPanel')?.remove()">Close</button>
+    </div>
+    <div id="xferQRBox" style="text-align:center;margin-top:14px"></div>
+    <p class="muted" style="font-size:12px;margin-top:10px">QR includes profile + recent care (no large photos). JSON is best for full history.</p>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function transferOptsFromPanel() {
+  return {
+    buyer: (document.getElementById('xferBuyer')?.value||'').trim(),
+    note: (document.getElementById('xferNote')?.value||'').trim(),
+    markSold: !!(document.getElementById('xferMarkSold')?.checked)
+  };
+}
+function recordLocalTransfer(snakeId, opts) {
+  const s = db.snakes.find(x => x.id === snakeId);
+  if (!s) return;
+  if (!Array.isArray(s.transferHistory)) s.transferHistory = [];
+  s.transferHistory.push({ date: today(), from: getBusinessLabel(), to: opts.buyer||'', note: opts.note||'Sale / transfer', kind:'transfer' });
+  if (opts.markSold) s.status = 'Sold';
+  save();
+}
+function generateTransferQR(id) {
+  const opts = transferOptsFromPanel();
+  let careLimit = 25, text = '', payload = null;
+  for (; careLimit >= 5; careLimit -= 5) {
+    payload = buildTransferPayload(id, Object.assign({}, opts, { careLimit: careLimit, includePhotos: false }));
+    text = transferPayloadToQRText(payload);
+    if (text.length < 1800) break;
+  }
+  const box = document.getElementById('xferQRBox');
+  if (!box) return;
+  box.innerHTML = `<canvas id="xferCanvas" style="margin:8px auto;background:#fff;border-radius:12px;max-width:100%"></canvas>
+    <p class="muted" style="font-size:12px">Buyer: Snakes → Scan QR to import.</p>`;
+  setTimeout(() => {
+    try {
+      drawQR('xferCanvas', text);
+      recordLocalTransfer(id, opts);
+      if (opts.markSold) { try { animalDetail(id); } catch (e) {} }
+    } catch (e) {
+      box.innerHTML = `<p class="muted">QR too large — download JSON instead.</p>
+        <button type="button" class="primary" onclick="downloadTransferFile('${id}')">Download transfer JSON</button>`;
+    }
+  }, 40);
+}
+function downloadTransferFile(id) {
+  const opts = transferOptsFromPanel();
+  const payload = buildTransferPayload(id, Object.assign({}, opts, { careLimit: 200 }));
+  if (!payload) return;
+  recordLocalTransfer(id, opts);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  const safe = (payload.snake.name || 'snake').replace(/[^\w\-]+/g, '_').slice(0, 40);
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bppro-transfer-' + safe + '-' + today() + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  if (opts.markSold) { try { animalDetail(id); } catch (e) {} }
+  alert('Transfer file ready. Buyer: Snakes → Import transfer.');
+}
+function applyTransferPayload(data) {
+  if (!data || !data.snake) { alert('Not a valid transfer package.'); return null; }
+  const sn = data.snake;
+  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : uid();
+  const snake = {
+    id: newId, name: sn.name || 'Imported snake', sex: sn.sex || 'Unknown',
+    genes: sn.genes || '', hets: sn.hets || '', status: sn.status || 'Holdback',
+    weight: sn.weight || '', dob: sn.dob || '', feedDays: sn.feedDays || 14,
+    notes: sn.notes || '', sire: '', dam: '', location: '', price: '',
+    photo: sn.photo || '', photos: Array.isArray(sn.photos) ? sn.photos : (sn.photo ? [sn.photo] : []),
+    transferHistory: Array.isArray(sn.transferHistory) ? sn.transferHistory.slice() : [],
+    created: today(), importedFrom: data.from || '', originId: sn.originId || ''
+  };
+  snake.transferHistory.push({ date: today(), from: data.from || 'Unknown seller', to: getBusinessLabel(), note: data.note || 'Imported transfer', kind: 'import' });
+  db.snakes.unshift(snake);
+  (Array.isArray(data.care) ? data.care : []).forEach(c => {
+    db.care.unshift({
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+      snakeId: newId, type: c.type || 'feed', date: c.date || today(),
+      value: c.value || '', result: c.result || '',
+      notes: ((c.notes || '') + (c.notes ? ' · ' : '') + 'Imported transfer')
+    });
+  });
+  save();
+  return snake;
+}
+function importTransferFile(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || data.type !== 'transfer') { alert('Not a BP Complete Pro transfer file.'); return; }
+      const snake = applyTransferPayload(data);
+      if (snake) { alert('Imported: ' + snake.name); animalDetail(snake.id); }
+    } catch (e) { alert('Could not read transfer file.'); }
+  };
+  reader.readAsText(file);
 }
 
 
