@@ -631,7 +631,8 @@ textarea { min-height: 96px; resize: vertical; }
     <section id="breeding" class="view">
       <h2>🧬 <span data-i18n="breeding_planner">Breeding Planner</span></h2>
       <p class="muted" data-i18n="breeding_help">112-gene calculator with multi-locus & allelic complex logic. Pick collection animals or add genes manually.</p>
-      <div class="card">
+      <div class="card" id="pairingScreen">
+        <div class="section-title"><h3>Pairing screen</h3></div>
         <div class="two">
           <div>
             <label data-i18n="male_from">Male from collection</label>
@@ -3691,6 +3692,14 @@ function openJobDetail(idx) {
 }
 
 
+function goPairingScreen() {
+  show('breeding');
+  setTimeout(() => {
+    const el = document.getElementById('pairingScreen');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 60);
+}
+
 function goAnimalsFilter(sex, status) {
   // Set filters BEFORE show('animals') so renderAnimals() uses them
   const sexEl = $('asex'), stEl = $('astatus'), aq = $('aq'), agene = $('agene');
@@ -3719,7 +3728,7 @@ function dash() {
     <div class="stat accent clickable" role="button" tabindex="0" onclick="show('clutches')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();show('clutches')}"><strong>${activeClutches}</strong><span>${t('active_clutches')}</span></div>
     <div class="stat clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','For Sale')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','For Sale')}"><strong>${forSale}</strong><span>${t('for_sale_kpi')}</span></div>
     <div class="stat warn clickable" role="button" tabindex="0" onclick="goAnimalsFilter('','Sold')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goAnimalsFilter('','Sold')}"><strong>${sold}</strong><span>${t('sold_snakes')||'Sold'}</span></div>
-    <div class="stat"><strong>${(db.pairings||[]).length}</strong><span>${t('pairings')}</span></div>
+    <div class="stat clickable" role="button" tabindex="0" aria-label="Open pairing screen" onclick="goPairingScreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goPairingScreen()}"><strong>${(db.pairings||[]).length}</strong><span>${t('pairings')}</span></div>
   `;
 
   // Alerts
@@ -4679,7 +4688,7 @@ function buildSaleHistoryLines(s) {
   else lines.push('Feeding history available on request');
   if (lastW && lastW.value) lines.push('Last weight ' + lastW.value + ' g' + (lastW.date ? ' (' + lastW.date + ')' : ''));
   else if (s.weight) lines.push('Weight ' + s.weight + ' g');
-  lines.push('Healthy · clean sheds');
+  lines.push('Guaranteed feeding');
   if (s.notes && String(s.notes).trim()) {
     const n = String(s.notes).trim().replace(/\s+/g, ' ');
     lines.push(n.length > 70 ? n.slice(0, 67) + '…' : n);
